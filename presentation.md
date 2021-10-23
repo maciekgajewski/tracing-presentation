@@ -127,9 +127,107 @@ struct Event {
 Note:
 
 * The event has to be small, fixed-size record, easy and fast to store.
+* The event record is trivial, neither constructor nor destructor.
 * The event type can be a simple enum (using 8 bytes, as they would be used by the
 padding anyway, and maybe they will be useful)
 * To identify the function, a code address is used. It has fixed size and is cheap to get. The function name can be obtained form it using DWARF debug info
 * Time comes from the TSC register. This is the fastest way
 
 ====
+
+### Event buffer
+
+```cpp
+thread_local Event* bufferBegin = nullptr;
+thread_local Event* bufferEnd   = nullptr;
+thread_local Event* dropPoint   = nullptr;
+
+void initTracing(size_t numEvents) {
+  bufferBegin = new Event[numEvents];
+  bufferEnd   = bufferBegin + numEvents;
+  dropPoint   = bufferBegin;
+}
+```
+
+Note:
+
+* The event buffer is like a vector - with fixed capacity and a end-of-data pointer
+* The event collection is per-thread. If more than one thread is used, it has to be initialized in each thread separately.
+
+====
+
+### The tracing instrumentation
+
+```cpp
+
+void someFunctionIWantToTrace() {
+
+  TRACE();
+
+  the->actual(code); // goes here
+}
+```
+
+Note:
+
+The tracing instrumentation is achieved by adding a simple macro at the very beginning
+for each function I'm interested in tracing.
+It is important that it is clear, visible, but doesn't obfuscate the actual code.
+
+====
+
+### Probe implementation
+
+```cpp
+
+#ifdef TRACING_ENABLED
+
+#define TRACE() \
+  _trace_addr: \
+  _Tracer _tracer(&&_trace_addr)
+
+#else
+
+#define TRACE() do {} while (false)
+
+#endif
+```
+
+Note:
+
+* If TRACING_ENABLED macro is not defined, the TRACE() probe is nothing.
+* Otherwise it consists of two elements: a label and a local variable.
+* The local variable will inject probe in it's constructor and destructor,
+thus when entering and exiting the function
+* The "&&" is a gcc extension (supported by clang) that resolves to the address of
+the label. It could also be achieved by anm inline assembly, but this is isn't portable either, and is even uglier.
+
+====
+
+### The tracer
+
+```cpp
+#include "x86intrin.h"
+struct _Tracer {
+  _Tracer(void *addr) : _addr(addr) {
+    assert(dropPoint < bufferEnd);
+    *(dropPoint++) = 
+      {EventType::Enter, __rdtsc(), uint64_t(_addr)};
+  }
+  ~_Tracer() {
+    assert(dropPoint < bufferEnd);
+    asm volatile("" : : : "memory"); // compiler barrier
+    *(dropPoint++)
+      = {EventType::Exit, __rdtsc(), uint64_t(_addr)};
+  }
+  void *_addr;
+};
+```
+
+Note:
+
+* It is crucial that the constructor and destructor are in-lined
+* The assert is only active in debug build; there is no boundary check in prod build!
+* The compiler barrier helps a bit with instruction reordering. Still, compiler sometimes re-orders some non-memory accessing instructions (ie arithmetics on registers) past the destructor. But this is acceptable.
+* Both functions resolve to 9-10 assembly instructions, and my estimate (based on measurements!) is that they take 2-3ns.
+* The member variable disappears, is optimized away
