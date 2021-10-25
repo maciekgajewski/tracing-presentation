@@ -13,7 +13,9 @@ I'm really sorry for the long title :)
 
 #### About me
 
-* Maciek Gajewski [maciej.gajewski0@gmail.com](mailto:maciej.gajewski0@gmail.com)
+Maciek Gajewski 
+
+[maciej.gajewski0@gmail.com](mailto:maciej.gajewski0@gmail.com)
 
 <img src="img/maciek.jpg" height="200"/>
 
@@ -57,8 +59,8 @@ Note:
 
 Note:
 
-* After each loop we measure the duration
-* The duration mostly depends on number of configured inputs
+* After each loop we measure the duration (we call it the "busy time")
+* The duration mostly depends on the number of configured inputs
 * For this particular application the median duration was around 400us
 * This means that the latency introduced was up to 400us, 200us on average
 * This was chosen as an acceptable value
@@ -77,8 +79,9 @@ Note:
 Note:
 
 * Sampling profiles are worthless for inspecting a rare case
+* Tracing would be cool, to catch such a long cycle, and see what actually happened
 * Existing tracers take a lot of time and are too invasive.
-* Maybe there exist a tool that would be useful, but I could't find one
+* Maybe there exist a tool that would be useful, but I could't find one!
 
 ====
 
@@ -100,7 +103,7 @@ The design principles of the tracing system:
 
 ### High level design
 
-<img src="img/app-postporcessr-visualiser.png" />
+<img src="img/app-postporcessr-visualiser.svg" />
 
 Note:
 
@@ -134,6 +137,7 @@ struct Event {
     uint64_t addr;  // code location address
     uint64_t tsc;   // timestamp from the TSC register
 };
+
 ```
 
 Note:
@@ -144,15 +148,6 @@ Note:
 padding anyway, and maybe they will be useful)
 * To identify the function, a code address is used. It has fixed size and is cheap to get. The function name can be obtained form it using DWARF debug info
 * Time comes from the TSC register. This is the fastest way
-
-====
-
-### TSC vs wall clock
-
-<img src="img/tsc-vs-ts.png" />
-
-ts = _a_*tsc + _b_
-
 
 ====
 
@@ -174,6 +169,38 @@ Note:
 
 * The event buffer is like a vector - with fixed capacity and a end-of-data pointer
 * The event collection is per-thread. If more than one thread is used, it has to be initialized in each thread separately.
+
+====
+
+### TSC vs wall clock
+
+<img src="img/tsc-vs-ts.png" />
+
+ts = _a_*tsc + _b_
+
+Note:
+
+* TSC is a CPU register counting clock cycles
+* The freq varies with the clock, on mobile, power-saving devices
+* Even on server boxes with fixed cycles in flows
+* Need to be recalculated frequently
+
+====
+
+### The clock sync event
+
+```cpp
+inline void addClockSyncEvent(uint64_t now) {
+  *(dropPoint++) 
+    = Event{EventType::ClockSync, __rdtsc(), now};
+}
+```
+
+Note:
+
+* Clock sync event simply associates wall-clock time with TSC time
+* ie provides data points for identifying the clock (linear regression)
+* Note: no boundary checking!
 
 ====
 
@@ -230,18 +257,18 @@ the label. It could also be achieved by anm inline assembly, but this is isn't p
 ```cpp
 #include "x86intrin.h"
 struct _Tracer {
-  _Tracer(void *addr) : _addr(addr) {
+  _Tracer(void *addr) : mAddr(addr) {
     assert(dropPoint < bufferEnd);
     *(dropPoint++) = 
-      {EventType::Enter, __rdtsc(), uint64_t(_addr)};
+      {EventType::Enter, __rdtsc(), uint64_t(mAddr)};
   }
   ~_Tracer() {
     assert(dropPoint < bufferEnd);
     asm volatile("" : : : "memory"); // compiler barrier
     *(dropPoint++)
-      = {EventType::Exit, __rdtsc(), uint64_t(_addr)};
+      = {EventType::Exit, __rdtsc(), uint64_t(mAddr)};
   }
-  void *_addr;
+  void *mAddr;
 };
 ```
 
@@ -252,3 +279,55 @@ Note:
 * The compiler barrier helps a bit with instruction reordering. Still, compiler sometimes re-orders some non-memory accessing instructions (ie arithmetics on registers) past the destructor. But this is acceptable.
 * Both functions resolve to 9-10 assembly instructions, and my estimate (based on measurements!) is that they take 2-3ns.
 * The member variable disappears, is optimized away
+
+====
+
+<!-- .slide: data-background-image="img/farquaad.jpeg" -->
+
+Note:
+
+* if program crashes, we need to increase the limit and run it again, no biggie
+
+====
+
+### Store on discard
+
+```cpp
+void TraceData::onCycle(busyTime, now) {
+  if (dropPoint >= bufferEnd) {
+    fmt::print("Trace buffer overrun!\n");
+    abort();
+  }
+
+  if (busyTime < mThreshold || mSkipThisCycle) {
+    dropPoint = bufferBegin;
+    addClockSyncEvent(now);
+    mSkipThisCycle = false;
+  } else {
+    addClockSyncEvent(now);
+    storeData();
+  }
+}
+```
+
+Note:
+
+* On every loop cycle, after measuring the busy time, we see if it was interesting for us
+* The only place when I check for buffer overrun, to die with some dignity
+
+====
+
+### Store on discard
+
+```cpp
+void TraceData::storeData() {
+  writeToStorage(bufferBegin, dropPoint);
+  dropPoint = bufferBegin;
+  mSkipThisCycle = true;
+}
+```
+
+Note:
+
+* When writing to storage, adding a clock event at the end,
+* so that the clock may be synced
