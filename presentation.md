@@ -290,7 +290,7 @@ Note:
 
 ====
 
-### Store on discard
+### Store or discard
 
 ```cpp
 void TraceData::onCycle(busyTime, now) {
@@ -317,7 +317,7 @@ Note:
 
 ====
 
-### Store on discard
+### Store or discard
 
 ```cpp
 void TraceData::storeData() {
@@ -331,3 +331,19 @@ Note:
 
 * When writing to storage, adding a clock event at the end,
 * so that the clock may be synced
+
+====
+
+### Event offloading
+
+<img src="img/app-shm-grabber-file.svg" />
+
+Note:
+
+* It happens so in HFT we use SHM a lot
+* And I hade a nice, performant SHM queue at my disposal
+* The app writes to the Q constantly, at this is very fast
+* At most: 2GBps, 5000B: 2.5us
+* Grabber is a tiny, some 100sloc (big part is boost::program_options)
+* Grabber can be run at any time, at any state of app life-cycle,
+producing only modest amount of files to trace
