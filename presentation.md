@@ -98,6 +98,18 @@ The design principles of the tracing system:
 
 ====
 
+### High level design
+
+<img src="img/app-postporcessr-visualiser.png" />
+
+Note:
+
+* The app should collect raw events with absolutely minimal overhead
+* Any processing needed should go to the postprocessor
+* Finally, the data has to be visualized and explored
+
+====
+
 ### Operation
 
 <img src="img/app-loop-collect-discard-store.png" />
@@ -115,7 +127,7 @@ The idea is to:
 ### Tracing event
 
 ```cpp
-enum class EventType : uint64_t { Enter, Exit };
+enum class EventType : uint64_t { Enter, Exit, ClockSync };
 
 struct Event {
     EventType type; // type of event
@@ -132,6 +144,15 @@ Note:
 padding anyway, and maybe they will be useful)
 * To identify the function, a code address is used. It has fixed size and is cheap to get. The function name can be obtained form it using DWARF debug info
 * Time comes from the TSC register. This is the fastest way
+
+====
+
+### TSC vs wall clock
+
+<img src="img/tsc-vs-ts.png" />
+
+ts = _a_*tsc + _b_
+
 
 ====
 
