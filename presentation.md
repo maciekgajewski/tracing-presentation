@@ -418,3 +418,14 @@ Note:
 * All we need is such file for the traced process
 * We can either use PID and go to /proc/$PID/maps if the process is still alive
 * ... or the process can create a copy of own maps for post-mortem analysis
+
+====
+
+#### `chrome://tracing`
+
+<img src="img/example-trace.png" />
+
+Note:
+
+* Now we have a stream of entry/exit events, function names and timestamp
+* And this is exactly what Tracing GUI built into the Chrome browser expects!
