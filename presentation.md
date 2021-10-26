@@ -413,7 +413,7 @@ Note:
 
 * This is output of cat's self maps -0 list of mapped memory regions
 * the first 2 columns are address ranges in process'es space
-* the last 2 columns is offset and path of a mapped file
+* the 4th and last columns are offset and path of a mapped file
 * This is exactly what we need
 * All we need is such file for the traced process
 * We can either use PID and go to /proc/$PID/maps if the process is still alive
@@ -435,4 +435,13 @@ Note:
 ### The whole picture
 
 <img src="img/entire-system.svg" />
+
+====
+
+### The Last Slide
+
+* [maciej.gajewski0@gmail.com](mailto:maciej.gajewski0@gmail.com)
+* chrome://tracing
+* dwarf++, elf++
+* https://maciekgajewski.github.io/tracing-presentation/
 

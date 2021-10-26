@@ -2,6 +2,9 @@
 
 A war story: using low-imact tracing to identify performance issues with high-performance server application.
 
+See online here: https://maciekgajewski.github.io/tracing-presentation/
+
+
 == PL ==
 
 # Małoinwazyjne śledzenie aplikacji
