@@ -174,7 +174,7 @@ Note:
 
 ### TSC vs wall clock
 
-<img src="img/tsc-vs-ts.png" />
+<img src="img/tsc-vs-ts.svg" />
 
 ts = _a_*tsc + _b_
 
@@ -200,7 +200,7 @@ Note:
 
 * Clock sync event simply associates wall-clock time with TSC time
 * ie provides data points for identifying the clock (linear regression)
-* Note: no boundary checking!
+* note - no boundary checking!
 
 ====
 
@@ -294,7 +294,7 @@ Note:
 
 ```cpp
 void TraceData::onCycle(busyTime, now) {
-  if (dropPoint >= bufferEnd) {
+  if (dropPoint >= bufferEnd) { // finally!
     fmt::print("Trace buffer overrun!\n");
     abort();
   }
@@ -347,3 +347,74 @@ Note:
 * Grabber is a tiny, some 100sloc (big part is boost::program_options)
 * Grabber can be run at any time, at any state of app life-cycle,
 producing only modest amount of files to trace
+
+====
+
+### Post-processing
+
+We have a stream of events, with
+* meaningful event type
+* useless timestamp,
+* useless address
+
+Note:
+
+* The event stream is useless at this point.
+The type makes sense, but the timestamp and address are meaningless.
+* At least the timestamp is easy
+
+====
+
+### Post-processing - time
+
+<img src="img/tsc-vs-ts.svg" />
+
+ts = _a_*tsc + _b_
+
+Note:
+
+* First post-processing pass finds ClockSync events and resolves the clock equation
+
+====
+
+### Post-processing - address
+
+* DWARF can be used to convert address to function name
+* Nice C++ libraries: *dwarf++* and *elf++*
+* Or -if you are lazy - just run *addr2line*
+
+Note:
+
+* Address can be converted to function name using DWARF utilities
+* There are nice libraries to work with DWARF: dwarf++ and elf++
+* Or you can just use command-line utility, addr2line, if you don't want to add extra deps
+
+====
+
+### DWARF
+
+* IN: (binary file, offset in the file)
+* OUT: (source file, line number, function name)
+* We don't have the required input data!
+
+Note:
+
+* DWARF is a debug format to store and query debug information embedded in binary files.
+Given an offset in a binary binary file, it can find useful debug info.
+* The problem is - we have no offset, we have no binary file!
+
+====
+
+#### `/proc/$PID/maps`
+
+<img src="img/cat-proc-self-maps.png" />
+
+Note:
+
+* This is output of cat's self maps -0 list of mapped memory regions
+* the first 2 columns are address ranges in process'es space
+* the last 2 columns is offset and path of a mapped file
+* This is exactly what we need
+* All we need is such file for the traced process
+* We can either use PID and go to /proc/$PID/maps if the process is still alive
+* ... or the process can create a copy of own maps for post-mortem analysis
