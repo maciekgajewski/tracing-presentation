@@ -429,3 +429,10 @@ Note:
 
 * Now we have a stream of entry/exit events, function names and timestamp
 * And this is exactly what Tracing GUI built into the Chrome browser expects!
+
+====
+
+### The whole picture
+
+<img src="img/entire-system.svg" />
+
