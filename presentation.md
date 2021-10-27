@@ -282,7 +282,7 @@ Note:
 
 ====
 
-<!-- .slide: data-background-image="img/farquaad.jpeg" -->
+<!-- .slide: data-background-image="img/farquaad.jpeg" data-background-size="contain"-->
 
 Note:
 
